@@ -8,14 +8,19 @@ output: html_notebook
 ```{r}
 rev.forcast <- function(now, years, assump.fixed, rates, market){
   
-  patients = ceiling(market$incidence*(1+market$growth)^(0:years))
-  price = assump.fixed$revenue.per.patient*(1+assump.fixed$price.inflation)^(0:years)
+  total.patients = ceiling(market$incidence*(1+market$growth)^(0:years))
+  treat.price = assump.fixed$revenue.per.patient*(1+assump.fixed$price.inflation)^(0:years)
+  market.share = seq(from = market$share.init, by = market$share.escalation, length.out = (years+1))
+  treated.patients = total.patients*market.share
+  sales = treat.price*treated.patients
   
   
   rev <- data.frame(year = seq(now, (now+years)),
-                    total.patients = patients,
-                    treat.price = price,
-                    rev.total = patients*price
+                    total.patients = total.patients,
+                    market.share = market.share,
+                    treated.patients = treated.patients,
+                    treat.price = treat.price,
+                    sales = sales
                     )
   
   return(rev)
