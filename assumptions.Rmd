@@ -1,0 +1,55 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Load required libraries:
+```{r}
+library(ggplot2)
+library(t)
+
+```
+
+
+Input model assumptions:
+```{r}
+assump.var <- data.frame(
+  enrollment = c(0,30,60,400,0),
+  duration = c(1,1,2,3,1),
+  trans.probability = c(0.625, 0.635, 0.307, 0.42, 0.853),
+  preclin.costs = c(125000, 125000, 100000, 100000, 0),
+  clinical.costs.per.patient = c(0, 20000, 73000, 60000, 0),
+  manuf.costs = c(0, 125000, 2250000, 0, 1250000)
+)
+
+row.names(assump.var) <- c("Nonclinical", "Phase 1", "Phase 2", "Phase 3", "Approval")
+
+assump.fixed <- data.frame(
+  approval.cost = 1300000,
+  patent.fees = 100000,
+  revenue.per.patient = 81000,
+  price.inflation = 0.02
+  )
+
+rates <- data.frame(
+  discount = 11.5,
+  USD.CAD = 1.35
+)
+
+market <- data.frame(
+  incidence = 46395,
+  growth = 0.2,
+  share.init = 0.05,
+  share.escalation = 0.03
+)
+
+```
+References:
+DiMasi JA et al. Trends in Risks Associated with New Drug Development: Success Rates for Investigational Drugs. Nat Biotech 87, 272-77 (2010)
+Stewart JJ et al. Putting a price on biotechnology. Nat Biotech 19, 813-17 (2001)
+https://www.bio.org/sites/default/files/Clinical%20Development%20Success%20Rates%202006-2015%20-%20BIO,%20Biomedtracker,%20Amplion%202016.pdf
+
+
+
+
+

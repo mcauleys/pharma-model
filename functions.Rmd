@@ -1,0 +1,33 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+rev.forcast <- function(now, years, assump.fixed, rates, market){
+  
+  patients = ceiling(market$incidence*(1+market$growth)^(0:years))
+  price = assump.fixed$revenue.per.patient*(1+assump.fixed$price.inflation)^(0:years)
+  
+  
+  rev <- data.frame(year = seq(now, (now+years)),
+                    total.patients = patients,
+                    treat.price = price,
+                    rev.total = patients*price
+                    )
+  
+  return(rev)
+  
+}
+
+
+forecast <- rev.forcast(2019, 10, assump.fixed, rates, market)
+
+ggplot(forecast) +
+  geom_line(aes(x = year, y = total.patients))
+
+
+```
+
