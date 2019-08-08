@@ -38,7 +38,7 @@ rates <- data.frame(
 
 market <- data.frame(
   incidence = 46395,
-  growth = 0.2,
+  growth = 0.018,
   share.init = 0.05,
   share.escalation = 0.03
 )

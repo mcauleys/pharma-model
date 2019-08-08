@@ -5,34 +5,110 @@ output: html_notebook
 
 
 
+Total sales
 ```{r}
-rev.forcast <- function(now, years, assump.fixed, rates, market){
-  
-  total.patients = ceiling(market$incidence*(1+market$growth)^(0:years))
-  treat.price = assump.fixed$revenue.per.patient*(1+assump.fixed$price.inflation)^(0:years)
-  market.share = seq(from = market$share.init, by = market$share.escalation, length.out = (years+1))
-  treated.patients = total.patients*market.share
-  sales = treat.price*treated.patients
-  
-  
-  rev <- data.frame(year = seq(now, (now+years)),
-                    total.patients = total.patients,
-                    market.share = market.share,
-                    treated.patients = treated.patients,
-                    treat.price = treat.price,
-                    sales = sales
-                    )
-  
-  return(rev)
-  
-}
+total.sales = c(247000,333000,114000,343000,1068000,1135000,1892000,1845000,1750000,2480000,1860000,2544000,3154000,2238000,3220000,3888000,2956000, 3204000)
+year = c(2015,2015,2015,2015,2016,2016,2016,2016,2017,2017,2017,2017,2018,2018,2018,2018,2019,2019)
+quarter = c(1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4,1,2)
+index = 1:length(quarter)
+
+total <- data.frame(index = index,
+                       year = year,
+                       quarter= quarter,
+                       sales = total.sales)
+
+# Generate the model
+model <- lm(sales ~ ns(index, 1), data = total)
+
+grid = total %>% data_grid(total.sales) %>% add_predictions(model)
+
+# Plot the data and model
+data.plot <- ggplot(total, aes(index, sales)) +
+             geom_point() + 
+              geom_line(aes(y = pred), data = grid, colour = "red", size = 1)
+
+residual <- total %>% add_residuals(model)
+
+# Plot the residual
+res.plot <- ggplot(residual, aes(resid)) + 
+            geom_histogram()
+
+grid.arrange(data.plot, res.plot, nrow = 1)
 
 
+```
+
+
+Movantik sales
+```{r}
+movantik.sales = c(255,301,319,343,396,358,392)
+year = c(2017,2018,2018,2018,2018,2019,2019)
+quarter = c(4,1,2,3,4,1,2)
+index = 1:length(quarter)
+
+
+movantik <- data.frame(index = index,
+                       year = year,
+                       quarter= quarter,
+                       sales = movantik.sales)
+
+# Generate the model
+model <- lm(sales ~ ns(index, 1), data = movantik)
+
+grid = movantik %>% data_grid(movantik.sales) %>% add_predictions(model)
+
+# Plot the data and model
+ggplot(movantik, aes(time, sales)) +
+  geom_point() + 
+  geom_line(aes(y = pred), data = grid, colour = "red", size = 1)
+
+residual <- movantik %>% add_residuals(model)
+
+# Plot the residual
+ggplot(residual, aes(resid)) + 
+  geom_density()
+
+summary(model)
+
+movantik.future <- data.frame( time = c(1:20) )
+sales <- predict(model, newdata = movantik.future)
+
+movantik.future <- cbind(movantik.future, sales)
+
+movantik <- rbind(movantik, movantik.future)
+
+ggplot(movantik, aes(time, sales)) +
+  geom_point()
+```
+
+Probuphine sales
+```{r}
+
+```
+
+Impavido sales
+```{r}
+
+```
+
+Burinex sales
+```{r}
+
+```
+
+```{r}
 forecast <- rev.forcast(2019, 10, assump.fixed, rates, market)
 
 ggplot(forecast) +
   geom_line(aes(x = year, y = total.patients))
 
-
 ```
+
+
+
+
+
+
+
+
 
