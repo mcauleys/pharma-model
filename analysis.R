@@ -114,6 +114,27 @@ fdaLabel <- function(company.name){
     return(label)
 }
 
+findLabelTrials <- function(label){
+    pattern <- "NCT\\w+"
+    trial <- regmatches(label$results$clinical_studies, regexpr(pattern, label$results$clinical_studies)) 
+    
+    return(trial)
+}
+
+findLabelBrand <- function(label){
+    pattern <- "(?<=DESCRIPTION\\s)\\w+"
+    brand <- regmatches(label$results$description, regexpr(pattern, label$results$description, perl = TRUE)) 
+    
+    return(brand)
+}
+
+findLabelGeneric <- function(label){
+    pattern <- "(?<=DESCRIPTION\\s)\\w+"
+    brand <- regmatches(label$results$description, regexpr(pattern, label$results$description, perl = TRUE)) 
+    
+    return(brand)
+}
+
 #Build an entry
 
 id <- "NCT02025985"
@@ -132,13 +153,16 @@ df <- data.frame(
 )
 
 
-
-
-test <- fdaLabel("Karyopharm")
+test <- fdaLabel("Puma")
+test <- findLabelTrials("Puma")
 test$results$clinical_studies
 
-getpmid(id)
+pattern <- "\\(([^\\)]+)\\)"
 
+pattern <- "\((\\w+)\)"
+regmatches(test$results$description, regexpr(pattern, test$results$description, perl = TRUE)) 
+
+test$results$description
 
 pmid[["IdList"]]
 
