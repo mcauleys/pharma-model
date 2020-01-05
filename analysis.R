@@ -158,9 +158,12 @@ test <- findLabelTrials("Puma")
 test$results$clinical_studies
 
 pattern <- "\\(([^\\)]+)\\)"
+pattern <- "\\(\\w+\\)"
 
-pattern <- "\((\\w+)\)"
+# This works
+pattern <- "(?<=\\()\\w+"
 regmatches(test$results$description, regexpr(pattern, test$results$description, perl = TRUE)) 
+
 
 test$results$description
 
