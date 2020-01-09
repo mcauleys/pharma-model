@@ -10,6 +10,8 @@ library(ggplot2)
 library(RPostgreSQL)
 require(XML)
 library(jsonlite)
+library(gridExtra)
+library(httr)
 
 databaseConnect <- function(){
     #Establishes connection to the clinical trial database, reference https://aact.ctti-clinicaltrials.org/
@@ -64,21 +66,28 @@ trialIntervention <- function(nct_id){
     return(results)
 }
 
-
 searchNameVariants <- function(companyname){
     # This function creates name variants to submit into the trialSearch function
     # Ex: name = "Karyopharm Therapeutics Inc"
     # Returns a vector of variants ended by "", "Inc", and "Inc."
     var <- c(gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", " Inc", companyname),
              gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", " Inc.", companyname),
-             gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", "", companyname))
+             gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", "", companyname),
+             gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", ", Inc.", companyname),
+             companyname)
+    
+    var <- unique(var)
     
     var <- paste("name = '", var, "'", sep = "")
     
     for (name in var){
+        print(name)
         ret <- trialSearch("sponsors", name)
         if (!is.na(names(ret)[1])){
             print(paste("Found: ", name))
+            
+            ret <- ret[ret$lead_or_collaborator == "lead",]
+            
             return(ret)
         }
     }
@@ -92,6 +101,10 @@ flexTrialSearch <- function(search, term, return){
     query <- paste("Select ", return," FROM", search, "WHERE", term, sep = " ")
     search.aact <- dbGetQuery(con, query)
     dbDisconnect(con)
+    
+    if (is_empty(search.aact)){
+        search.aact <- NA
+    }
     
     return(search.aact)
 }   
@@ -123,21 +136,78 @@ findLabelTrials <- function(label){
 
 findLabelBrand <- function(label){
     pattern <- "(?<=DESCRIPTION\\s)\\w+"
-    brand <- regmatches(label$results$description, regexpr(pattern, label$results$description, perl = TRUE)) 
     
-    return(brand)
+    brands <- c()
+    
+    for (des in label$results$description){
+        brands <- c(brands, regmatches(des, regexpr(pattern, des, perl = TRUE)))
+    }
+    
+    return(brands)
 }
 
-findLabelGeneric <- function(label){
-    pattern <- "(?<=DESCRIPTION\\s)\\w+"
-    brand <- regmatches(label$results$description, regexpr(pattern, label$results$description, perl = TRUE)) 
-    
-    return(brand)
-}
+# Import Prices
+d.prices <- read.csv(file = "NBI-Prices.csv", stringsAsFactors = FALSE)
+names <- d.prices[1,]
+names(d.prices) <- c("date", names(d.prices)[2:ncol(d.prices)])
 
-#Build an entry
+d.prices <- d.prices[-1,]
+d.prices[, c(2: ncol(d.prices))] <- sapply(d.prices[, c(2: ncol(d.prices))], as.numeric)
+d.prices[,1] <- as.Date(d.prices[,1], format = "%m/%d/%y")
 
+tickers <- paste(names(d.prices)[2:length(names(d.prices))], collapse = ", ")
+
+# Import index price movements
+nbi <- read.csv(file = "NBI-Index.csv", stringsAsFactors = FALSE)
+
+# Create a relative value by subtracting the index from the daily returns
+d.prices.diff <- d.prices[,2:ncol(d.prices)] - nbi$ï..NBI.USA
+
+d.prices.diff <- cbind(d.prices$date, d.prices.diff) 
+names(d.prices.diff) <- c("date", names(d.prices.diff)[2:ncol(d.prices.diff)])
+
+# Rearrange the dataframes
+d.prices <- gather(d.prices, key = "ticker", value = "price.change", -date)
+d.prices.diff <- gather(d.prices.diff, key = "ticker", value = "price.change", -date)
+
+# Add the company names to the pricing dataframe
+names <- cbind(t(names), names(names))
+rownames(names) <- c()
+names <- data.frame(names)
+
+d.prices <- cbind(d.prices, names$X1[match(d.prices$ticker, names$V2)])
+d.prices.diff <- cbind(d.prices.diff, names$X1[match(d.prices.diff$ticker, names$V2)])
+
+names(d.prices) <- c("date", "ticker", "price.change", "name")
+names(d.prices.diff) <- c("date", "ticker", "price.change", "name")
+
+ 
+
+
+p1 <- ggplot(d.prices[d.prices$ticker == "ALXN.USA",]) +
+      geom_line(aes(x = date, y = price.change))
+
+p2 <- ggplot(d.prices[d.prices$ticker == "ALXN.USA",]) +
+      geom_density(aes(price.change)) +
+      coord_flip()
+
+p3 <- ggplot(d.prices.diff[d.prices.diff$ticker == "ALXN.USA",]) +
+      geom_line(aes(x = date, y = price.change))
+
+p4 <- ggplot(d.prices.diff[d.prices.diff$ticker == "ALXN.USA",]) +
+      geom_density(aes(price.change)) +
+      coord_flip()
+
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+
+
+
+# Build an entry
 id <- "NCT02025985"
+
+nct.id <- searchNameVariants("Seres Therapeutics")
+
+id <- nct.id$nct_id[30]
 
 df <- data.frame(
     drug.generic = flexTrialSearch("interventions", paste("nct_id = '",id,"'", sep = ""), "name"), # This may need to be updated if there are multiple interventions
@@ -153,7 +223,8 @@ df <- data.frame(
 )
 
 
-test <- fdaLabel("Puma")
+test <- fdaLabel("Alexion")
+test <- findLabelBrand("Alexion")
 test <- findLabelTrials("Puma")
 test$results$clinical_studies
 
