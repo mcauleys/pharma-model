@@ -146,6 +146,7 @@ findLabelBrand <- function(label){
     return(brands)
 }
 
+# ================ This code imports and processes the pricing data ================
 # Import Prices
 d.prices <- read.csv(file = "NBI-Prices.csv", stringsAsFactors = FALSE)
 names <- d.prices[1,]
@@ -181,32 +182,42 @@ d.prices.diff <- cbind(d.prices.diff, names$X1[match(d.prices.diff$ticker, names
 names(d.prices) <- c("date", "ticker", "price.change", "name")
 names(d.prices.diff) <- c("date", "ticker", "price.change", "name")
 
+# ================ Load the already processed data ================
+load(file = "return.RData")
+load(file = "corr-return.RData")
 
-p1 <- ggplot(d.prices[d.prices$ticker == "ALXN.USA",]) +
-      geom_line(aes(x = date, y = price.change))
 
-p2 <- ggplot(d.prices[d.prices$ticker == "ALXN.USA",]) +
+p3 <- ggplot(d.prices.diff[d.prices.diff$ticker == "PGNX.USA",]) +
+      geom_line(aes(x = date, y = price.change)) +
+      geom_vline(xintercept = as.Date("2011-02-17"), colour = "red") +
+      geom_vline(xintercept = as.Date("2010-06-07"), colour = "red")
+
+p4 <- ggplot(d.prices.diff[d.prices.diff$ticker == "PGNX.USA",]) +
       geom_density(aes(price.change)) +
       coord_flip()
 
-p3 <- ggplot(d.prices.diff[d.prices.diff$ticker == "ALXN.USA",]) +
-      geom_line(aes(x = date, y = price.change))
+grid.arrange(p3, p4, nrow = 1)
 
-p4 <- ggplot(d.prices.diff[d.prices.diff$ticker == "ALXN.USA",]) +
-      geom_density(aes(price.change)) +
-      coord_flip()
+ggplot(d.prices.diff[d.prices.diff$ticker == "ALXN.USA",]) +
+    geom_point(aes(x = reorder(date, price.change), y = price.change)) +
+    geom_vline(xintercept = as.Date("2010-01-15")) +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+    
 
-grid.arrange(p1, p2, p3, p4, nrow = 2)
-
-
+# ================ Import and process press release data ================
 # Import the press releases
 press <- read.csv(file = "bw.csv", header = TRUE, stringsAsFactors = FALSE)
 
 # Rearrange the dataframe
 press <- gather(press, key = "ticker", value = "release")
 
-# Remove any #NA values
+# Clean up the data by removing any #NA values and empty press releases
 press <- press[-which(press$release == "#N/A"),]
+
+pattern <- "BW$" # Will need to figure out a way to include the other wire services
+press <- press[-grep(pattern, press$release, perl = TRUE),]
 
 # Pull the press release date
 pattern <- "[0-9//]+"
@@ -217,15 +228,29 @@ pattern <- "(?<=BW\\s\\s\\s).+"
 title <- as.character(regmatches(press$release, regexpr(pattern, press$release, perl = TRUE)))
 press <- cbind(press, title)
 
-dates <- data.frame(dates[!is.na(dates)])
+# Remove the original column
+press <- press[,c(1,3,4)]
 
-pattern <- "(?<=BW\\s\\s\\s).+"
-title <- regmatches(press$ï..MRNA.USA, regexpr(pattern, press$ï..MRNA.USA, perl = TRUE))
-title <- data.frame(title[!is.na(title)])
+# Add the corrected price movement to the press release day
 
-releases <- cbind(dates, title)
-names(releases) <- c("date", names(press))
+names$X1[match(d.prices$ticker, names$V2)]
 
+d.pr
+
+match(press$dates, d.prices.diff$date)
+
+t <- d.prices.diff$price.change[match(press$dates, d.prices.diff$date)]
+
+merge(press, d.prices.diff, by.x='date', by.y='ticker')
+
+grep("Phase 1", press$title[press$ticker == "PGNX.USA"])
+
+press$dates[press$ticker == "PGNX.USA"][grep("Phase 1", press$title[press$ticker == "PGNX.USA"])]
+
+
+
+press[press$ticker == "PGNX.USA",]
+press
 
 # Build an entry
 id <- "NCT02025985"
