@@ -181,8 +181,6 @@ d.prices.diff <- cbind(d.prices.diff, names$X1[match(d.prices.diff$ticker, names
 names(d.prices) <- c("date", "ticker", "price.change", "name")
 names(d.prices.diff) <- c("date", "ticker", "price.change", "name")
 
- 
-
 
 p1 <- ggplot(d.prices[d.prices$ticker == "ALXN.USA",]) +
       geom_line(aes(x = date, y = price.change))
@@ -200,6 +198,33 @@ p4 <- ggplot(d.prices.diff[d.prices.diff$ticker == "ALXN.USA",]) +
 
 grid.arrange(p1, p2, p3, p4, nrow = 2)
 
+
+# Import the press releases
+press <- read.csv(file = "bw.csv", header = TRUE, stringsAsFactors = FALSE)
+
+# Rearrange the dataframe
+press <- gather(press, key = "ticker", value = "release")
+
+# Remove any #NA values
+press <- press[-which(press$release == "#N/A"),]
+
+# Pull the press release date
+pattern <- "[0-9//]+"
+dates <- as.Date(regmatches(press$release, regexpr(pattern, press$release, perl = TRUE)), format = "%m/%d/%Y")
+press <- cbind(press, dates)
+
+pattern <- "(?<=BW\\s\\s\\s).+"
+title <- as.character(regmatches(press$release, regexpr(pattern, press$release, perl = TRUE)))
+press <- cbind(press, title)
+
+dates <- data.frame(dates[!is.na(dates)])
+
+pattern <- "(?<=BW\\s\\s\\s).+"
+title <- regmatches(press$ï..MRNA.USA, regexpr(pattern, press$ï..MRNA.USA, perl = TRUE))
+title <- data.frame(title[!is.na(title)])
+
+releases <- cbind(dates, title)
+names(releases) <- c("date", names(press))
 
 
 # Build an entry
