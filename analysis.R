@@ -12,6 +12,7 @@ require(XML)
 library(jsonlite)
 library(gridExtra)
 library(httr)
+library(tidytext)
 
 databaseConnect <- function(){
     #Establishes connection to the clinical trial database, reference https://aact.ctti-clinicaltrials.org/
@@ -231,7 +232,46 @@ press <- cbind(press, title)
 # Remove the original column
 press <- press[,c(1,3,4)]
 
-# Add the corrected price movement to the press release day
+# Clean the initial ticker
+press$ticker[press$ticker == "ï..LGND.USA"] <- "LGND.USA"
+
+# Add the corrected price movement to the press release day for the correct ticker
+db <- merge(press, d.prices.diff, by.x=c('ticker', 'dates'), by.y=c('ticker','date'))
+
+# ================ Text mining processing ================
+
+
+db[grep("Phase 3", db$title),]
+
+release_words <- test %>%
+  unnest_tokens(word, title)
+
+b <- release_words %>%
+     group_by(word) %>%
+     summarize(return = mean(price.change),
+            words = n())
+
+
+release_words %>%
+  count(word, sort = TRUE)
+
+words_by_ticker <- release_words %>%
+  count(ticker, word, sort = TRUE) %>%
+  ungroup()
+
+words_by_newsgroup
+
+tf_idf <- words_by_ticker %>%
+  bind_tf_idf(word, ticker, n) %>%
+  arrange(desc(tf_idf))
+
+tf_idf
+
+db$title[db$price.change < -10]
+
+match(d.prices.diff$date, press$dates)
+match(d.prices.diff$ticker, press$ticker)
+
 
 names$X1[match(d.prices$ticker, names$V2)]
 
@@ -241,7 +281,6 @@ match(press$dates, d.prices.diff$date)
 
 t <- d.prices.diff$price.change[match(press$dates, d.prices.diff$date)]
 
-merge(press, d.prices.diff, by.x='date', by.y='ticker')
 
 grep("Phase 1", press$title[press$ticker == "PGNX.USA"])
 
