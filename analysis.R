@@ -13,6 +13,7 @@ library(jsonlite)
 library(gridExtra)
 library(httr)
 library(tidytext)
+library(quanteda)
 
 databaseConnect <- function(){
     #Establishes connection to the clinical trial database, reference https://aact.ctti-clinicaltrials.org/
@@ -242,6 +243,25 @@ db <- merge(press, d.prices.diff, by.x=c('ticker', 'dates'), by.y=c('ticker','da
 
 
 db$price.change[grep("Primary Endpoint", db$title)]
+
+names(db) <- c("ticker", "dates", "text", "price.change", "name")
+db$text <- as.character(db$text)
+corp <- corpus(db)
+tok <- tokens(corp)
+
+kwic(tok, pattern =  phrase('Phase 3'))
+tok_comp <- tokens_compound(tok, pattern = phrase(c('Phase 1', 
+                                                    'Phase 2', 
+                                                    'Phase 3')))
+
+dfmat_inaug <- dfm(tok)
+tstat_dist <- as.dist(textstat_dist(dfmat_inaug))
+clust <- hclust(tstat_dist)
+plot(clust, hang = -1, xlab = "Distance", ylab = NULL)
+
+head(clust)
+
+topfeatures(dfmat_inaug, 10)
 
 release_words <- test %>%
   unnest_tokens(word, title)
