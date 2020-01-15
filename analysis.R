@@ -241,7 +241,7 @@ db <- merge(press, d.prices.diff, by.x=c('ticker', 'dates'), by.y=c('ticker','da
 # ================ Text mining processing ================
 
 
-db[grep("Phase 3", db$title),]
+db$price.change[grep("Primary Endpoint", db$title)]
 
 release_words <- test %>%
   unnest_tokens(word, title)
