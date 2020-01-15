@@ -2,151 +2,8 @@
 # Author: Scott McAuley
 # Last Upodated: 2019-07-23
 
-# TODO Have the trial search return results from partial names and not just full proper names
-# TODO Create a way to illustrate overlapping trials in the same phase
-# TODO 
-
-library(ggplot2)
-library(RPostgreSQL)
-require(XML)
-library(jsonlite)
-library(gridExtra)
-library(httr)
-library(tidytext)
-library(quanteda)
-
-databaseConnect <- function(){
-    #Establishes connection to the clinical trial database, reference https://aact.ctti-clinicaltrials.org/
-    drv <- dbDriver('PostgreSQL')
-    con <- dbConnect(drv, dbname="aact",host="aact-db.ctti-clinicaltrials.org", port=5432, user="smcaul1", password="o8ewfhluwf3hf8a3923")
-    
-    return(con)
-}
-
-trialSearch <- function(search, term){
-    # Returns a dataframe of the trials that match the search terms
-    # Ex: search = "sponsors", term = "name = 'Tetra Bio-Pharma'"
-    con <- databaseConnect()
-    query <- paste("Select * FROM", search, "WHERE", term, sep = " ")
-    search.aact <- dbGetQuery(con, query)
-    dbDisconnect(con)
-
-    return(search.aact)
-}    
-
-trialData <- function(nct_id){
-    # Returns dataframe of the trial information based on nct_id
-    # A list of ids will return as separate rows in the data frame
-    con <- databaseConnect()
-    results <- data.frame()
-
-    for (id in nct_id){
-        query <- paste("Select * FROM studies WHERE nct_id = '", id, "'", sep = "")
-        search.aact <- dbGetQuery(con, query)
-        results <- rbind(results, search.aact)
-    }
-    
-    dbDisconnect(con)
-    
-    return(results)
-}
-
-trialIntervention <- function(nct_id){
-    # Returns dataframe of the trial information based on nct_id
-    # A list of ids will return as separate rows in the data frame
-    con <- databaseConnect()
-    results <- data.frame()
-    
-    for (id in nct_id){
-        query <- paste("Select * FROM interventions WHERE nct_id = '", id, "'", sep = "")
-        search.aact <- dbGetQuery(con, query)
-        results <- rbind(results, search.aact)
-    }
-    
-    dbDisconnect(con)
-    
-    return(results)
-}
-
-searchNameVariants <- function(companyname){
-    # This function creates name variants to submit into the trialSearch function
-    # Ex: name = "Karyopharm Therapeutics Inc"
-    # Returns a vector of variants ended by "", "Inc", and "Inc."
-    var <- c(gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", " Inc", companyname),
-             gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", " Inc.", companyname),
-             gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", "", companyname),
-             gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", ", Inc.", companyname),
-             companyname)
-    
-    var <- unique(var)
-    
-    var <- paste("name = '", var, "'", sep = "")
-    
-    for (name in var){
-        print(name)
-        ret <- trialSearch("sponsors", name)
-        if (!is.na(names(ret)[1])){
-            print(paste("Found: ", name))
-            
-            ret <- ret[ret$lead_or_collaborator == "lead",]
-            
-            return(ret)
-        }
-    }
-}
-
-flexTrialSearch <- function(search, term, return){
-    # Returns a dataframe of the trials that match the search terms
-    # Reference https://aact.ctti-clinicaltrials.org/static/documentation/aact_schema.png
-    # Ex: search = "sponsors", term = "name = 'Tetra Bio-Pharma'", return = * - for all
-    con <- databaseConnect()
-    query <- paste("Select ", return," FROM", search, "WHERE", term, sep = " ")
-    search.aact <- dbGetQuery(con, query)
-    dbDisconnect(con)
-    
-    if (is_empty(search.aact)){
-        search.aact <- NA
-    }
-    
-    return(search.aact)
-}   
-
-getpmid <- function(nct.id){
-    tmp <- GET(paste("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=", nct.id, sep = ""))
-    tmp <- xmlParse(tmp)
-    tmp <- xmlToList(tmp)
-    
-    
-    if (is.null(unlist(tmp$IdList))){
-        return(NA)
-    } else{
-        return(unlist(tmp$IdList))
-    }
-}
-
-fdaLabel <- function(company.name){
-    label <- fromJSON(paste("https://api.fda.gov/drug/label.json?search=openfda.manufacturer_name:'", company.name,"'&limit=50", sep = ""))
-    return(label)
-}
-
-findLabelTrials <- function(label){
-    pattern <- "NCT\\w+"
-    trial <- regmatches(label$results$clinical_studies, regexpr(pattern, label$results$clinical_studies)) 
-    
-    return(trial)
-}
-
-findLabelBrand <- function(label){
-    pattern <- "(?<=DESCRIPTION\\s)\\w+"
-    
-    brands <- c()
-    
-    for (des in label$results$description){
-        brands <- c(brands, regmatches(des, regexpr(pattern, des, perl = TRUE)))
-    }
-    
-    return(brands)
-}
+# TODO Include other press release sources
+# TODO Change the price correction to S&P 500 instead of the index
 
 # ================ This code imports and processes the pricing data ================
 # Import Prices
@@ -161,7 +18,16 @@ d.prices[,1] <- as.Date(d.prices[,1], format = "%m/%d/%y")
 tickers <- paste(names(d.prices)[2:length(names(d.prices))], collapse = ", ")
 
 # Import index price movements
-nbi <- read.csv(file = "NBI-Index.csv", stringsAsFactors = FALSE)
+nbi <- read.csv(file = "indices.csv", stringsAsFactors = FALSE)
+
+# Import market cap 
+nbi.market.cap <- read.csv(file = "NBI-Mkt-Cap.csv", stringsAsFactors = FALSE)
+names <- nbi.market.cap[1,]
+names(nbi.market.cap) <- c("date", names(nbi.market.cap)[2:ncol(nbi.market.cap)])
+
+nbi.market.cap <- nbi.market.cap[-1,]
+nbi.market.cap[, c(2: ncol(nbi.market.cap))] <- sapply(nbi.market.cap[, c(2: ncol(nbi.market.cap))], as.numeric)
+nbi.market.cap[,1] <- as.Date(nbi.market.cap[,1], format = "%m/%d/%y")
 
 # Create a relative value by subtracting the index from the daily returns
 d.prices.diff <- d.prices[,2:ncol(d.prices)] - nbi$ï..NBI.USA
@@ -172,6 +38,7 @@ names(d.prices.diff) <- c("date", names(d.prices.diff)[2:ncol(d.prices.diff)])
 # Rearrange the dataframes
 d.prices <- gather(d.prices, key = "ticker", value = "price.change", -date)
 d.prices.diff <- gather(d.prices.diff, key = "ticker", value = "price.change", -date)
+nbi.market.cap <- gather(nbi.market.cap, key = "ticker", value = "market.cap", -date)
 
 # Add the company names to the pricing dataframe
 names <- cbind(t(names), names(names))
@@ -184,29 +51,10 @@ d.prices.diff <- cbind(d.prices.diff, names$X1[match(d.prices.diff$ticker, names
 names(d.prices) <- c("date", "ticker", "price.change", "name")
 names(d.prices.diff) <- c("date", "ticker", "price.change", "name")
 
-# ================ Load the already processed data ================
-load(file = "return.RData")
-load(file = "corr-return.RData")
+d.prices <- d.prices[-which(is.na(d.prices$price.change)),]
+d.prices.diff <- d.prices.diff[-which(is.na(d.prices.diff$price.change)),]
 
-
-p3 <- ggplot(d.prices.diff[d.prices.diff$ticker == "PGNX.USA",]) +
-      geom_line(aes(x = date, y = price.change)) +
-      geom_vline(xintercept = as.Date("2011-02-17"), colour = "red") +
-      geom_vline(xintercept = as.Date("2010-06-07"), colour = "red")
-
-p4 <- ggplot(d.prices.diff[d.prices.diff$ticker == "PGNX.USA",]) +
-      geom_density(aes(price.change)) +
-      coord_flip()
-
-grid.arrange(p3, p4, nrow = 1)
-
-ggplot(d.prices.diff[d.prices.diff$ticker == "ALXN.USA",]) +
-    geom_point(aes(x = reorder(date, price.change), y = price.change)) +
-    geom_vline(xintercept = as.Date("2010-01-15")) +
-    theme(axis.title.x=element_blank(),
-          axis.text.x=element_blank(),
-          axis.ticks.x=element_blank())
-    
+d.prices.diff <- merge(nbi.market.cap, d.prices.diff, by.x=c('ticker', 'date'), by.y=c('ticker','date'))
 
 # ================ Import and process press release data ================
 # Import the press releases
@@ -239,10 +87,49 @@ press$ticker[press$ticker == "ï..LGND.USA"] <- "LGND.USA"
 # Add the corrected price movement to the press release day for the correct ticker
 db <- merge(press, d.prices.diff, by.x=c('ticker', 'dates'), by.y=c('ticker','date'))
 
+# ================ Load the already processed data ================
+load(file = "return.RData")
+load(file = "corr-return.RData")
+load(file = "db.RData")
+
+# ================ Search ticker news for keywords and plot on timecourse and density ================
+plot.prices.diff(d.prices.diff, db, "SGEN.USA", "FDA Approval")
+
+# ================ Search news for keywords and plot on total density plot ================
+plot.total.density(d.prices.diff, db, "AVBS")
+
+# ================ Find releases associated with biggest moves ================
+avg <- mean(d.prices.diff$price.change)
+sd <- sd(d.prices.diff$price.change)
+
+pos <- avg + 3*sd
+neg <- avg - 3*sd
+
+test <- db[db$price.change > pos | db$price.change < neg,]
+test <- db[((db$price.change > pos | db$price.change < neg) & db$ticker == "SPPI.USA"),]
+
+# ================ Testing ================
+db[db$ticker == "SPPI.USA",][grep("Phase 3", db$title[db$ticker == "SPPI.USA"]), "dates"]
+test <- db[db$ticker == "SPPI.USA",][grep("Phase 3", db$title[db$ticker == "SPPI.USA"]), "price.change"]
+
+test <- as.Date(c("2010-01-12", "2012-04-05"))
+
+d.prices.diff[(d.prices.diff$date == test & d.prices.diff$ticker == "SPPI.USA"),]
+
+d.prices.diff[(d.prices.diff$ticker == "SPPI.USA" & d.prices.diff$date == test),]
+
+plot.prices.diff(d.prices.diff, "SPPI.USA", test)
+
+
+ggplot(d.prices.diff[d.prices.diff$ticker == "ALXN.USA",]) +
+  geom_point(aes(x = reorder(date, price.change), y = price.change)) +
+  geom_vline(xintercept = as.Date("2010-01-15")) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+
 # ================ Text mining processing ================
-
-
-db$price.change[grep("Primary Endpoint", db$title)]
 
 names(db) <- c("ticker", "dates", "text", "price.change", "name")
 db$text <- as.character(db$text)
