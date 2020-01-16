@@ -5,39 +5,183 @@
 
 
 # Load Libraries
-library(tidyverse)
 library(ggplot2)
-library(modelr)
-library(splines) # ns function
-library(zoo) # as.yearqtr function
+library(RPostgreSQL)
+require(XML)
+library(jsonlite)
+library(gridExtra)
+library(httr)
+library(tidytext)
+library(quanteda)
 
-CGR <- function(sales){
-  # Find the compound growth rate for a vector containing timeseries of values, starting with the oldest value and ending with the most recent value
-  CGR <- (sales[length(sales)]/sales[1])^(1/length(sales)) - 1
-  return(CGR)
+databaseConnect <- function(){
+  #Establishes connection to the clinical trial database, reference https://aact.ctti-clinicaltrials.org/
+  drv <- dbDriver('PostgreSQL')
+  con <- dbConnect(drv, dbname="aact",host="aact-db.ctti-clinicaltrials.org", port=5432, user="smcaul1", password="o8ewfhluwf3hf8a3923")
+  
+  return(con)
+}
+
+trialSearch <- function(search, term){
+  # Returns a dataframe of the trials that match the search terms
+  # Ex: search = "sponsors", term = "name = 'Tetra Bio-Pharma'"
+  con <- databaseConnect()
+  query <- paste("Select * FROM", search, "WHERE", term, sep = " ")
+  search.aact <- dbGetQuery(con, query)
+  dbDisconnect(con)
+  
+  return(search.aact)
+}    
+
+trialData <- function(nct_id){
+  # Returns dataframe of the trial information based on nct_id
+  # A list of ids will return as separate rows in the data frame
+  con <- databaseConnect()
+  results <- data.frame()
+  
+  for (id in nct_id){
+    query <- paste("Select * FROM studies WHERE nct_id = '", id, "'", sep = "")
+    search.aact <- dbGetQuery(con, query)
+    results <- rbind(results, search.aact)
+  }
+  
+  dbDisconnect(con)
+  
+  return(results)
+}
+
+trialIntervention <- function(nct_id){
+  # Returns dataframe of the trial information based on nct_id
+  # A list of ids will return as separate rows in the data frame
+  con <- databaseConnect()
+  results <- data.frame()
+  
+  for (id in nct_id){
+    query <- paste("Select * FROM interventions WHERE nct_id = '", id, "'", sep = "")
+    search.aact <- dbGetQuery(con, query)
+    results <- rbind(results, search.aact)
+  }
+  
+  dbDisconnect(con)
+  
+  return(results)
+}
+
+searchNameVariants <- function(companyname){
+  # This function creates name variants to submit into the trialSearch function
+  # Ex: name = "Karyopharm Therapeutics Inc"
+  # Returns a vector of variants ended by "", "Inc", and "Inc."
+  var <- c(gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", " Inc", companyname),
+           gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", " Inc.", companyname),
+           gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", "", companyname),
+           gsub(", Inc|, Inc.| Inc| Inc.| Corporation| Corp|, Corp| Corp.|, Corp.| Ltd.| Ltd", ", Inc.", companyname),
+           companyname)
+  
+  var <- unique(var)
+  
+  var <- paste("name = '", var, "'", sep = "")
+  
+  for (name in var){
+    print(name)
+    ret <- trialSearch("sponsors", name)
+    if (!is.na(names(ret)[1])){
+      print(paste("Found: ", name))
+      
+      ret <- ret[ret$lead_or_collaborator == "lead",]
+      
+      return(ret)
+    }
+  }
+}
+
+flexTrialSearch <- function(search, term, return){
+  # Returns a dataframe of the trials that match the search terms
+  # Reference https://aact.ctti-clinicaltrials.org/static/documentation/aact_schema.png
+  # Ex: search = "sponsors", term = "name = 'Tetra Bio-Pharma'", return = * - for all
+  con <- databaseConnect()
+  query <- paste("Select ", return," FROM", search, "WHERE", term, sep = " ")
+  search.aact <- dbGetQuery(con, query)
+  dbDisconnect(con)
+  
+  if (is_empty(search.aact)){
+    search.aact <- NA
+  }
+  
+  return(search.aact)
+}   
+
+getpmid <- function(nct.id){
+  tmp <- GET(paste("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=", nct.id, sep = ""))
+  tmp <- xmlParse(tmp)
+  tmp <- xmlToList(tmp)
+  
+  
+  if (is.null(unlist(tmp$IdList))){
+    return(NA)
+  } else{
+    return(unlist(tmp$IdList))
+  }
+}
+
+fdaLabel <- function(company.name){
+  label <- fromJSON(paste("https://api.fda.gov/drug/label.json?search=openfda.manufacturer_name:'", company.name,"'&limit=50", sep = ""))
+  return(label)
+}
+
+findLabelTrials <- function(label){
+  pattern <- "NCT\\w+"
+  trial <- regmatches(label$results$clinical_studies, regexpr(pattern, label$results$clinical_studies)) 
+  
+  return(trial)
+}
+
+findLabelBrand <- function(label){
+  pattern <- "(?<=DESCRIPTION\\s)\\w+"
+  
+  brands <- c()
+  
+  for (des in label$results$description){
+    brands <- c(brands, regmatches(des, regexpr(pattern, des, perl = TRUE)))
+  }
+  
+  return(brands)
 }
 
 
+# ================ Data visualizations ================
 
+plot.prices.diff <- function(prices.df, press.df, ticker, phrase){
+  # This plots the timecourse of the price differences and the density function
+  # Then searches for the phrase and plots it as a red line on both the timecourse and price figures
+  
+  d <- press.df[press.df$ticker == ticker,][grep(phrase, press.df$text[press.df$ticker == ticker]), "dates"]
+  p <- press.df[press.df$ticker == ticker,][grep(phrase, press.df$text[press.df$ticker == ticker]), "price.change"]
 
-
-rev.forcast <- function(now, years, assump.fixed, rates, market){
+  p1 <- ggplot(prices.df[prices.df$ticker == ticker,]) +
+    geom_line(aes(x = date, y = market.cap)) +
+    geom_vline(xintercept = as.Date(d), colour = "red")
   
-  total.patients = ceiling(market$incidence*(1+market$growth)^(0:years))
-  treat.price = assump.fixed$revenue.per.patient*(1+assump.fixed$price.inflation)^(0:years)
-  market.share = seq(from = market$share.init, by = market$share.escalation, length.out = (years+1))
-  treated.patients = total.patients*market.share
-  sales = treat.price*treated.patients
+  p2 <- ggplot(prices.df[prices.df$ticker == ticker,]) +
+    geom_line(aes(x = date, y = price.change)) +
+    geom_vline(xintercept = as.Date(d), colour = "red")
   
+  p3 <- ggplot(prices.df[prices.df$ticker == ticker,]) +
+    geom_density(aes(price.change)) +
+    geom_vline(xintercept = p, colour = "red") +
+    coord_flip()
   
-  rev <- data.frame(year = seq(now, (now+years)),
-                    total.patients = total.patients,
-                    market.share = market.share,
-                    treated.patients = treated.patients,
-                    treat.price = treat.price,
-                    sales = sales
-  )
-  
-  return(rev)
+  grid.arrange(p1, p2, p3, nrow = 1)
   
 }
+
+plot.total.density <- function(prices.df, press.df, phrase){
+  
+  p <- press.df[grep(phrase, press.df$text), "price.change"]
+  
+  ggplot(prices.df) +
+    geom_density(aes(price.change)) +
+    geom_vline(xintercept = p, colour = "red") +
+    xlim(c(-100, 100))
+
+}
+
