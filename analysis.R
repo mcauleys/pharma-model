@@ -219,7 +219,7 @@ id <- "NCT02025985"
 
 nct.id <- searchNameVariants("Seattle Genetics Inc.")
 
-nct.id.t <- nct.id$nct_id[50:52]
+nct.id.t <- nct.id$nct_id[10:20]
 
 id <- nct.id.t[1]
 
@@ -265,12 +265,11 @@ p1 <- ggplot(d.prices.diff[d.prices.diff$ticker == "SGEN.USA",]) +
 
 p2 <- ggplot(df) +
         geom_segment(aes(x = start_date, xend = primary_completion_date, y = nct.id, yend = nct.id, colour = phase)) +
-        xlim(c(as.Date("2010-01-01"), as.Date("2020-01-01")))
+        xlim(c(as.Date("2010-01-01"), as.Date("2020-01-01"))) +
+        theme(axis.title = element_blank())
 
-gA <- ggplotGrob(p1)
-gB <- ggplotGrob(p2)
-grid::grid.newpage()
-grid::grid.draw(rbind(gA, gB))
+plot_grid(p1, p2, ncol = 1, align = 'v', axis = 'lr', rel_heights = c(1, 0.5))
+
 
 grid.arrange(p1, p2, nrow = 2)
 

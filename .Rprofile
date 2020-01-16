@@ -11,8 +11,9 @@ require(XML)
 library(jsonlite)
 library(gridExtra)
 library(httr)
-library(tidytext)
-library(quanteda)
+library(tidytext) # For text analysis
+library(quanteda) # For text anlaysis
+library(cowplot) # For aligning ggplots
 
 databaseConnect <- function(){
   #Establishes connection to the clinical trial database, reference https://aact.ctti-clinicaltrials.org/
