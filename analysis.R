@@ -4,7 +4,10 @@
 
 # TODO Include other press release sources
 # TODO Change the price correction to S&P 500 instead of the index
+<<<<<<< HEAD
 # TODO Allow the trial system to pull multiple trials at once
+=======
+>>>>>>> 5c771a832bb5c01be1727b3f1a080d42d7d032de
 
 # ================ This code imports and processes the pricing data ================
 # Import Prices
@@ -108,6 +111,7 @@ neg <- avg - 3*sd
 
 test <- db[db$price.change > pos | db$price.change < neg,]
 test <- db[((db$price.change > pos | db$price.change < neg) & db$ticker == "SPPI.USA"),]
+<<<<<<< HEAD
 
 # ================ Testing ================
 db[db$ticker == "SPPI.USA",][grep("Phase 3", db$title[db$ticker == "SPPI.USA"]), "dates"]
@@ -117,6 +121,17 @@ test <- as.Date(c("2010-01-12", "2012-04-05"))
 
 d.prices.diff[(d.prices.diff$date == test & d.prices.diff$ticker == "SPPI.USA"),]
 
+=======
+
+# ================ Testing ================
+db[db$ticker == "SPPI.USA",][grep("Phase 3", db$title[db$ticker == "SPPI.USA"]), "dates"]
+test <- db[db$ticker == "SPPI.USA",][grep("Phase 3", db$title[db$ticker == "SPPI.USA"]), "price.change"]
+
+test <- as.Date(c("2010-01-12", "2012-04-05"))
+
+d.prices.diff[(d.prices.diff$date == test & d.prices.diff$ticker == "SPPI.USA"),]
+
+>>>>>>> 5c771a832bb5c01be1727b3f1a080d42d7d032de
 d.prices.diff[(d.prices.diff$ticker == "SPPI.USA" & d.prices.diff$date == test),]
 
 plot.prices.diff(d.prices.diff, "SPPI.USA", test)
