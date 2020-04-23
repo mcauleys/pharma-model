@@ -6,6 +6,8 @@
 
 # Load Libraries
 library(ggplot2)
+library(tidyr)
+library(dplyr)
 library(RPostgreSQL)
 require(XML)
 library(jsonlite)
@@ -184,5 +186,38 @@ plot.total.density <- function(prices.df, press.df, phrase){
     geom_vline(xintercept = p, colour = "red") +
     xlim(c(-100, 100))
 
+}
+
+tidy.press <- function(release, ws){
+  press <- gather(release, key = "ticker", value = "release")
+  
+  # Clean up the data by removing any #NA values and empty press releases
+  press <- press[-which(press$release == "#N/A"),]
+  
+  if (ws == "BW"){
+    pattern <- "BW$" # Will need to figure out a way to include the other wire services
+    press <- press[-grep(pattern, press$release, perl = TRUE),] 
+  }
+  
+  if (ws != "BW"){
+    press <- press[-which(press$release == ""),]
+  }
+  
+  # Pull the press release date
+  pattern <- "[0-9//]+"
+  dates <- as.Date(regmatches(press$release, regexpr(pattern, press$release, perl = TRUE)), format = "%m/%d/%Y")
+  press <- cbind(press, dates)
+  
+  pattern <- paste("(?<=", ws, "\\s).+", sep = "")
+  title <- as.character(regmatches(press$release, regexpr(pattern, press$release, perl = TRUE)))
+  press <- cbind(press, title)
+  
+  # Remove the original column
+  press <- press[,c(1,3,4)]
+  
+  # Clean the initial ticker
+  press$ticker[press$ticker == "ï..LGND.USA"] <- "LGND.USA"
+  
+  return(press)
 }
 

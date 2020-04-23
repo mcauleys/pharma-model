@@ -4,10 +4,7 @@
 
 # TODO Include other press release sources
 # TODO Change the price correction to S&P 500 instead of the index
-<<<<<<< HEAD
 # TODO Allow the trial system to pull multiple trials at once
-=======
->>>>>>> 5c771a832bb5c01be1727b3f1a080d42d7d032de
 
 # ================ This code imports and processes the pricing data ================
 # Import Prices
@@ -56,42 +53,34 @@ names(d.prices) <- c("date", "ticker", "price.change", "name")
 names(d.prices.diff) <- c("date", "ticker", "price.change", "name")
 
 d.prices <- d.prices[-which(is.na(d.prices$price.change)),]
-d.prices.diff <- d.prices.diff[-which(is.na(d.prices.diff$price.change)),]
+d.prices <- merge(nbi.market.cap, d.prices, by.x=c('ticker', 'date'), by.y=c('ticker','date'))
 
+d.prices.diff <- d.prices.diff[-which(is.na(d.prices.diff$price.change)),]
 d.prices.diff <- merge(nbi.market.cap, d.prices.diff, by.x=c('ticker', 'date'), by.y=c('ticker','date'))
 
 # ================ Import and process press release data ================
 # Import the press releases
-press <- read.csv(file = "bw.csv", header = TRUE, stringsAsFactors = FALSE)
+bw <- read.csv(file = "bw.csv", header = TRUE, stringsAsFactors = FALSE)
+bw <- bw[,1:216] # Need to correct for a stray column in CSV
+gnw <- read.csv(file = "gnw.csv", header = TRUE, stringsAsFactors = FALSE)
+prn <- read.csv(file = "prn1.csv", header = TRUE, stringsAsFactors = FALSE)
 
-# Rearrange the dataframe
-press <- gather(press, key = "ticker", value = "release")
+press <- rbind(tidy.press(bw, "BW"), 
+               tidy.press(gnw, "GNW"), 
+               tidy.press(prn, "PRN"))
 
-# Clean up the data by removing any #NA values and empty press releases
-press <- press[-which(press$release == "#N/A"),]
-
-pattern <- "BW$" # Will need to figure out a way to include the other wire services
-press <- press[-grep(pattern, press$release, perl = TRUE),]
-
-# Pull the press release date
-pattern <- "[0-9//]+"
-dates <- as.Date(regmatches(press$release, regexpr(pattern, press$release, perl = TRUE)), format = "%m/%d/%Y")
-press <- cbind(press, dates)
-
-pattern <- "(?<=BW\\s\\s\\s).+"
-title <- as.character(regmatches(press$release, regexpr(pattern, press$release, perl = TRUE)))
-press <- cbind(press, title)
-
-# Remove the original column
-press <- press[,c(1,3,4)]
-
-# Clean the initial ticker
-press$ticker[press$ticker == "ï..LGND.USA"] <- "LGND.USA"
+rm(bw, gnw, prn)
 
 # Add the corrected price movement to the press release day for the correct ticker
-db <- merge(press, d.prices.diff, by.x=c('ticker', 'dates'), by.y=c('ticker','date'))
+db.corr <- merge(press, d.prices.diff, by.x=c('ticker', 'dates'), by.y=c('ticker','date'))
+id <- 1:nrow(db.corr)
+db.corr <- cbind(db.corr, id)
+
+# Add the absolute price movement to the press release day for the correct ticker
+db <- merge(press, d.prices, by.x=c('ticker', 'dates'), by.y=c('ticker','date'))
 
 # ================ Load the already processed data ================
+# TODO Changed some file names = need to change this
 load(file = "return.RData")
 load(file = "corr-return.RData")
 load(file = "db.RData")
@@ -111,7 +100,17 @@ neg <- avg - 3*sd
 
 test <- db[db$price.change > pos | db$price.change < neg,]
 test <- db[((db$price.change > pos | db$price.change < neg) & db$ticker == "SPPI.USA"),]
-<<<<<<< HEAD
+
+# ================ Testing ================
+
+
+
+db[db$ticker == "SPPI.USA",][grep("Phase 3", db$title[db$ticker == "SPPI.USA"]), "dates"]
+test <- db[db$ticker == "SPPI.USA",][grep("Phase 3", db$title[db$ticker == "SPPI.USA"]), "price.change"]
+
+test <- as.Date(c("2010-01-12", "2012-04-05"))
+
+d.prices.diff[(d.prices.diff$date == test & d.prices.diff$ticker == "SPPI.USA"),]
 
 # ================ Testing ================
 db[db$ticker == "SPPI.USA",][grep("Phase 3", db$title[db$ticker == "SPPI.USA"]), "dates"]
@@ -121,17 +120,6 @@ test <- as.Date(c("2010-01-12", "2012-04-05"))
 
 d.prices.diff[(d.prices.diff$date == test & d.prices.diff$ticker == "SPPI.USA"),]
 
-=======
-
-# ================ Testing ================
-db[db$ticker == "SPPI.USA",][grep("Phase 3", db$title[db$ticker == "SPPI.USA"]), "dates"]
-test <- db[db$ticker == "SPPI.USA",][grep("Phase 3", db$title[db$ticker == "SPPI.USA"]), "price.change"]
-
-test <- as.Date(c("2010-01-12", "2012-04-05"))
-
-d.prices.diff[(d.prices.diff$date == test & d.prices.diff$ticker == "SPPI.USA"),]
-
->>>>>>> 5c771a832bb5c01be1727b3f1a080d42d7d032de
 d.prices.diff[(d.prices.diff$ticker == "SPPI.USA" & d.prices.diff$date == test),]
 
 plot.prices.diff(d.prices.diff, "SPPI.USA", test)
@@ -204,11 +192,70 @@ match(press$dates, d.prices.diff$date)
 
 t <- d.prices.diff$price.change[match(press$dates, d.prices.diff$date)]
 
+# =================Phase 2 Impact on pricing ===================
+phase2corr <- db.corr[grep("Phase 2", db.corr$title),]
 
-grep("Phase 1", press$title[press$ticker == "PGNX.USA"])
+phase2corr <- phase2corr[grep("Positive", phase2corr$title),]
+
+#phase2corr <- phase2corr[phase2corr$dates >= as.Date("2015-01-01"),]
+
+# Only want companies will less then $2B market cap
+phase2corr <- phase2corr[phase2corr$market.cap < 1000,]
+
+mask <- data.frame(ticker = phase2corr$ticker,
+                   id = phase2corr$id,
+                   start = as.Date(phase2corr$dates - 7),
+                   end = as.Date(phase2corr$dates + 7))
+
+phase2time <- data.frame()
+
+for (a in 1:nrow(mask)) {
+  i <- mask[a, ]
+  tmp <- d.prices.diff[(d.prices.diff$ticker == i$ticker & 
+              as.Date(d.prices.diff$date) > i$start & 
+              as.Date(d.prices.diff$date) < i$end),]
+  index <- tmp$market.cap/tmp$market.cap[1] * 100
+  num <- 1:nrow(tmp)
+  id <- rep(i$id,nrow(tmp))
+  tmp <- cbind(tmp, index, num, id)
+  
+  phase2time <- rbind(phase2time, tmp)
+}
+
+phase2time$id <- factor(phase2time$id)
+
+# Time Average
+avg <- phase2time %>% 
+  group_by(num) %>%
+  summarize(m = mean(index), sd = sd(index))
+
+ggplot() +
+  geom_line(data = phase2time, aes(x = num, y = index, colour = id)) +
+  geom_line(data = avg, aes(x = num, y = m), size = 1.2) +
+  theme(legend.position = "none") +
+  scale_x_continuous(breaks = c(1:9), labels = c(-3:5)) +
+  labs(title = "Indexed Price Movement Around Phase 2 Results",
+       y= "Indexed Price (%)",
+       x = "Days from Announcement")
+
+ggplot(avg) +
+  geom_line(aes(x = num, y = m))
+
+ggplot(phase2corr) +  geom_point(aes(x = price.change, y = market.cap))
+
+grid.arrange(p1, p2, nrow = 2)
+
+ggplot(phase2time) +
+  geom_point(aes(x = , y = market.cap))
+
+geom_density(aes(price.change))
+  ylim(c(0,1000))
+
+
 
 press$dates[press$ticker == "PGNX.USA"][grep("Phase 1", press$title[press$ticker == "PGNX.USA"])]
 
+# ====================================
 
 
 press[press$ticker == "PGNX.USA",]
